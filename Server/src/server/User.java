@@ -1,3 +1,5 @@
+package server;
+
 public class User {
     private final long id;
     private String username;

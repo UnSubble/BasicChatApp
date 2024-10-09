@@ -1,3 +1,7 @@
+package server;
+
+import commands.*;
+
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -10,16 +14,25 @@ public class Server {
     private final ServerSocket socket;
     private Thread serverThread;
     private final List<ClientHandler> outputsOfUsers;
+    private final Map<String, Command> commandMap;
 
     public Server(int port) {
         try {
             this.running = new AtomicBoolean(false);
             this.socket = new ServerSocket(port);
             this.outputsOfUsers = new ArrayList<>();
-            this.outputsOfUsers.add(new Logger());
+            this.commandMap = new HashMap<>();
+            initializeCommands();
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private void initializeCommands() {
+        new NicknameCommand(this);
+        new DisconnectCommand(this);
+        new KickCommand(this);
+        new ShutdownCommand(this);
     }
 
     public Server() {
@@ -36,8 +49,12 @@ public class Server {
 
     public void execute() {
         if (running.get())
-            throw new RuntimeException("Server is already running!");
+            throw new RuntimeException("server.Server is already running!");
         running.set(true);
+        Logger logger = new Logger();
+        Thread loggerThread = new Thread(logger::start);
+        loggerThread.start();
+        outputsOfUsers.add(logger);
         serverThread = new Thread(() -> {
             while (running.get()) {
                 try {
@@ -69,6 +86,14 @@ public class Server {
         System.exit(0);
     }
 
+    public void addCommand(Command command) {
+        this.commandMap.putIfAbsent(command.commandName(), command);
+    }
+
+    public Command getCommand(String name) {
+        return commandMap.get(name);
+    }
+
     public synchronized void remove(ClientHandler handler, String username) {
         outputsOfUsers.forEach(x -> x.getWriter().println(username + " has left the chat!"));
         outputsOfUsers.remove(handler);
@@ -77,12 +102,21 @@ public class Server {
     class Logger extends ClientHandler {
 
         protected Logger() {
-            super(new PrintWriter(System.out, true));
+            super(new PrintWriter(System.out, true), Server.this, 0);
         }
 
         @Override
         public void start() {
-
+            BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+            String line;
+            try {
+                while (running.get()) {
+                    if ((line = reader.readLine()) != null) {
+                        this.performInput(line);
+                    }
+                }
+            } catch (IOException e) {
+            }
         }
     }
 }
