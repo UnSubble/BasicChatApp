@@ -1,20 +1,50 @@
+import javax.swing.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
-import java.util.Scanner;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class Client {
+public class Client extends JPanel {
     private final AtomicBoolean running;
     private final Socket socket;
-    private final Scanner scanner;
+    private final JTextArea history;
+    private final JButton chatButton;
+    private final JTextArea textArea;
+    private final PrintWriter writer;
 
     public Client(int port) throws IOException {
         this.socket = new Socket("localhost", port);
         this.running = new AtomicBoolean(true);
-        this.scanner = new Scanner(System.in);
+        this.history = new JTextArea();
+        this.textArea = new JTextArea();
+        this.chatButton = new JButton();
+        this.writer = new PrintWriter(socket.getOutputStream(), true);
+        this.init();
+    }
+
+    private void init() {
+        history.setEditable(false);
+        history.setLineWrap(true);
+        history.setWrapStyleWord(true);
+
+        JScrollPane scrollPane = new JScrollPane(history);
+        scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
+        scrollPane.setBounds(20, 20, 760, 220);
+
+        textArea.setBounds(20, 400, 580, 100);
+
+        chatButton.setBounds(640, 425, 120, 50);
+        chatButton.setText("Chat");
+        chatButton.addActionListener(new ButtonListener());
+
+        this.setLayout(null);
+        this.add(scrollPane);
+        this.add(chatButton);
+        this.add(textArea);
     }
 
     public Client() throws IOException {
@@ -23,22 +53,44 @@ public class Client {
 
     public void start() throws IOException {
         BufferedReader s = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-        PrintWriter writer = new PrintWriter(socket.getOutputStream(), true);
+
         new Thread(() -> {
             while (running.get()) {
-                String input;
                 try {
-                    if ((input = s.readLine()) != null)
-                        System.out.println(input);
+                    String input = s.readLine();
+                    if (input != null) {
+                        SwingUtilities.invokeLater(() -> {
+                            history.append(input + "\n");
+                            history.setCaretPosition(history.getDocument().getLength());
+                        });
+                    }
                 } catch (IOException e) {
+                    SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(this,
+                            "Disconnected: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE));
+                    running.set(false);
                 }
             }
-            }).start();
-        while (running.get()) {
-            String line = scanner.nextLine();
-            writer.println(line);
-            if (line.equals("/quit")) {
-                running.set(false);
+        }).start();
+    }
+
+    public void shutdown() throws IOException {
+        running.set(false);
+        writer.close();
+        socket.close();
+    }
+
+    private class ButtonListener implements ActionListener {
+        @Override
+        public void actionPerformed(ActionEvent e) {
+            String message = textArea.getText().trim();
+            if (message.isEmpty()) return;
+            writer.println(message);
+            textArea.setText("");
+            if (message.equals("/quit")) {
+                try {
+                    shutdown();
+                } catch (IOException ignored) {
+                }
                 System.exit(0);
             }
         }
