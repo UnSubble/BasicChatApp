@@ -5,12 +5,14 @@ import commands.Command;
 import java.io.*;
 import java.net.Socket;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class ClientHandler {
 
+    private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss");
     private Socket socket;
     private User user;
     private Server server;
@@ -77,7 +79,7 @@ public class ClientHandler {
             return true;
         else
             server.getOutputsOfUsers().forEach(x ->
-                    x.writer.println(String.format("[%s] %s: %s", time, user.getUsername(), line)));
+                    x.writer.println(String.format("[%s] %s: %s", TIME_FORMAT.format(time), user.getUsername(), line)));
         return false;
     }
 
